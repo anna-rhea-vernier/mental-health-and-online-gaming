@@ -1,0 +1,374 @@
+---
+title: "Gaming_Study_DSasField_Final_Project"
+author: "Lauren Bain, Shyam Vangeepuram, Anna Vernier"
+date: "2/9/2022"
+output: pdf_document
+---
+## Project Purpose:
+
+This analysis explores the potential mental health implications of time spent online gaming. Additionally, we explore the types of people who are playing, and what games they play.
+
+## Introduction:
+
+In the last few decades, playing video games online has dramatically increased in popularity. Correlations have been observed between excessive or compulsive gaming behavior and psychological disorders such as depression, anxiety, social phobia, and decreased life satisfaction, especially among adolescents. However, most of the existing research literature into the connections between mental health and excessive video gaming have used small sample sizes and focused primarily on young adults from limited cultural backgrounds.
+
+The dataset used for this analysis consists of responses from over 13,000 participants in an international survey. Participants were solicited in the subreddit /r/league of legends, a popular multiplayer game in which teams of ten players battle. Predictably, This game comprised the largest sub-sample of players in the dataset.
+The survey evaluated gaming behavior across several dimensions, including what game respondents played most, their preferred platform, and whether they played alone, with strangers, or with friends. Subjects were also asked to estimate how many hours they spent playing in an average week, and how many hours they spent engaged with gaming outside of play, participating in activities such as watching streams, replays, or tutorials.
+
+Participants also answered questions from screening assessments of general anxiety disorders, social phobia, overall life satisfaction, and narcissism.
+
+### Anxiety
+
+Anxiety was measured using the Generalized Anxiety Disorder 7 scale (GAD-7; Spitzer et al, 2006) which measures how severely the person has experienced seven symptoms on a scale of 0-5 (nervousness, inability to stop worrying, excessive worry, restlessness, difficulty in relaxing, easy irritation, and fear of something awful happening) in the last two weeks. The points are summed for a normative total score, with 5, 10, and 15 representing mild, moderate, and severe anxiety respectively.
+
+### Life Satisfaction
+
+The Satisfaction with Life Scale (SWLS; Diener et al, 1985) is a five-item screening with a seven-point scale ranging from “strongly disagree” to “strongly agree” on statements like, “I am satisfied with life.” It is designed to interrogate individuals’ subjective experience of their quality of life without specifying domains such as health or employment status. Each item is summed for a score of 5-35.
+
+### Social Phobia
+
+Although the GAD-7 test also broadly addresses social anxiety, the Social Phobia InveNtory (SPIN; Antony et al, 2006) was included in this survey to specifically assess fear, avoidance, and physiological arousal in the preceding week. This screening has 17 items such as “I avoid going to parties” and “talking to strangers scares me.” Respondents are asked to evaluate how true each item is for them from 0 “not at all” to 4 “extremely” and is scored from 0-68, with below 20 interpreted as no social anxiety, 21-30 as mild, 31-40 as moderate, and 41-50 as severe, and 51+ as very severe.
+
+### Narcissism
+
+Finally, the Single Item Narcissism Scale (SINS; Konrath et. Al, 2014) simply asked participants, “On a scale of 0-7, how true is this statement: 'I am a narcissist.’ (note that ‘narcissist’ means egotistical, self-focused, and vain).” Although not adequate for clinical diagnosis, this test has been validated as reasonably accurate against more extensive screenings for narcissism, and is considered an effective measure in studies where time or other constraints make more extensive screenings less feasible. The inclusion of the SINS measure in this survey is interesting because narcissism has been linked to both lower anxiety, and difficulty maintaining interpersonal relationships. As such, this item acts as a mitigating factor between the measures of social phobia and general anxiety.
+
+## Data Details
+
+In the data set, each answer to the psychological screening questionnaires were kept separate. Before we began our analysis, we summed the results of each test following the recommended guideline criteria into single variables so that each subject had a total GAD-7, SWLS, and SPIN score. Where applicable, we placed the scores in bins to narrow them down for simpler
+analysis.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#Packages used
+library(tidyverse)
+library(readr)
+library(ggplot2)
+library(gridExtra)
+library(maps)
+library(rworldmap)
+library(viridis)
+
+
+#Reading in data:
+#Note: csv file needs to be downloaded and imported by user.
+
+GamingStudy_data <- read_csv("GamingStudy_data.csv")
+
+#data frame to be used
+gsd <- GamingStudy_data
+```
+
+## Data Cleaning
+
+```{r}
+#remove excess columns
+gsd <- GamingStudy_data %>% select(-c('S. No.', 'Timestamp'))
+
+#remove outliers
+gsd <- gsd[!(gsd$Hours > 120),]
+gsd <- gsd[!(gsd$streams > 120),]
+
+###GAD Scores
+
+#sum GAD scores
+gsd$Total_GAD_Score <- rowSums(gsd[1:7])
+
+#remove individual GAD scores
+gsd <- subset(gsd, select = -c(1:7))
+
+###SWL Scores
+
+#sum SWL Scores
+gsd$Total_SWL_Score <- rowSums(gsd[2:6])
+
+#remove individual SWL Scores
+gsd <- subset(gsd, select = -c(2:6))
+
+
+###SPIN Scores
+
+#sum scores
+gsd$Total_Spin_Score <- rowSums(gsd[10:26])
+
+#remove individual SPIN scores
+gsd <- subset(gsd, select= -c(10:26))
+
+```
+
+### Modifying GAD, SWL, and SPIN scores for analysis
+These assumptions are made following the guidelines for scoring each survey.
+```{r}
+###GAD - general anxiety disorder
+
+#GAD summed meaning: a total score greater then 10 means there is likelihood
+#of an anxiety disorder. for our research we will assume this is true
+#and assign a new column "Anxiety_Disorder" with:
+#0 as minimal anxiety
+#1 as mild anxiety
+#2 moderate anxiety
+#3 sever anxiety
+gsd$Anxiety_Disorder <- 0
+gsd$Anxiety_Disorder[gsd$Total_GAD_Score < 5] <- 0
+gsd$Anxiety_Disorder[gsd$Total_GAD_Score >= 5 & gsd$Total_GAD_Score < 10] <- 1
+gsd$Anxiety_Disorder[gsd$Total_GAD_Score >= 10 & gsd$Total_GAD_Score < 15] <- 2
+gsd$Anxiety_Disorder[gsd$Total_GAD_Score >= 15] <- 3
+
+
+
+###SWL - satisfaction with life
+
+gsd$Life_Satisfaction <- 0
+
+#assign 1 to score of less than 10. 1 means extremely dissatisfied with life
+gsd$Life_Satisfaction[gsd$Total_SWL_Score < 10] <- 1
+
+#assign 2 to score between 10 & 15. 2 means generally dissatisfied
+gsd$Life_Satisfaction[gsd$Total_SWL_Score >= 10 & gsd$Total_SWL_Score < 15] <- 2
+
+#assign 3 to score between 15 & 20. 3 means slightly below average satisfaction
+gsd$Life_Satisfaction[gsd$Total_SWL_Score >= 15 & gsd$Total_SWL_Score < 20] <- 3
+
+#assign 4 to score between 20 & 25. 4 means average satisfaction
+gsd$Life_Satisfaction[gsd$Total_SWL_Score >= 20 & gsd$Total_SWL_Score < 25] <- 4
+
+#assign 5 to score between 25 & 30. 5 means satisfied
+gsd$Life_Satisfaction[gsd$Total_SWL_Score >= 25 & gsd$Total_SWL_Score < 30] <- 5
+
+#assign 6 to score greater then 30. 6 means greatly satisfied
+gsd$Life_Satisfaction[gsd$Total_SWL_Score >= 30] <- 6
+
+
+
+### SPIN - Social Phobia Index
+
+gsd$Social_Phobia <- 0
+
+#assign 0 to score of less than 20. 0 means no social phobia
+gsd$Social_Phobia[gsd$Total_Spin_Score <= 20] <- 0
+
+#assign 1 to score between 20 and 30. 1 means mild social phobia
+gsd$Social_Phobia[gsd$Total_Spin_Score > 20 & gsd$Total_Spin_Score <= 30] <- 1
+
+#assign 2 to score between 30 and 40. 2 means moderate social phobia
+gsd$Social_Phobia[gsd$Total_Spin_Score > 30 & gsd$Total_Spin_Score <= 40] <- 2
+
+#assign 3 to score between 40 and 50. 3 means sever social phobia
+gsd$Social_Phobia[gsd$Total_Spin_Score > 40 & gsd$Total_Spin_Score <= 50] <- 3
+
+#assign 4 to score greater than 50. 4 means very severe social phobia
+gsd$Social_Phobia[gsd$Total_Spin_Score > 50] <- 4
+
+
+
+```
+
+## Analysis:
+
+### General Overview of Survey Responses
+
+
+#### Create Histogram Plots for GAD, SWL, and SPIN
+```{r}
+#GAD Histogram
+gsd$Low_Anxiety <- as.factor(gsd$Total_GAD_Score < 10)
+GAD_hist <- ggplot(gsd, aes(x=Total_GAD_Score, fill = Low_Anxiety)) + geom_histogram() +
+  ggtitle("Total GAD Score Frequency")
+
+
+#SWL Histogram
+gsd$High_Satisfaction <- as.factor(gsd$Life_Satisfaction>3)
+SWL_hist <- ggplot(gsd, aes(x=Life_Satisfaction, fill=High_Satisfaction)) + geom_histogram() + 
+  ggtitle("Life Satisfaction Frequency")
+
+
+
+#SPIN Histogram
+gsd$Low_Social_Phobia <- as.factor(gsd$Social_Phobia <= 1)
+SPIN_hist <-  ggplot(gsd, aes(x=Social_Phobia, fill=Low_Social_Phobia)) + geom_histogram() + 
+  ggtitle("Social Phobia Score Frequency")
+
+
+```
+
+#### Histograms
+
+```{r}
+#Histogram Grids
+grid.arrange(GAD_hist,SPIN_hist,SWL_hist)
+```
+
+The plots above show the frequency distributions of the responses to the 
+survey questions regarding GAD - General Anxiety Disorder, SPIN - Social Phobia
+Inventory, and SWL - Satisfaction with Life.
+
+**GAD**
+We see that scores with less than 10 mean a low likelihood of an anxiety 
+disorder shown in blue. The majority of the participants fall into that 
+category. 
+
+**SPIN**
+A score of 0 or 1 indicate low social phobia, where a high majority of the
+participants stand. 
+
+**SWL**
+These results show a pretty even distribution of satisfied and unsatisfied
+participants with their lives. A score of 3 or less indicates low satisfaction.
+Note that the value of the scores in this question are inverted compared to the
+previous two. 
+
+### Comparing Hours Gaming and Scores
+
+In this section we will explore the relationship between hours spent gaming per
+week and scores.
+
+First, look at the data on hours spent gaming.
+
+```{r}
+summary(gsd$Hours)
+hours_hist <- hist(gsd$Hours)
+mean_hours <- mean(gsd$Hours, na.rm=TRUE)
+```
+The average of hours spent gaming per week is 21.5. 
+
+
+**GAD and Hours**
+
+Here, we explore the data by plotting GAD, SPIN, and SWL scores along with hours spent gaming.
+```{r}
+gsd_hours_GAD <- gsd %>% group_by(Total_GAD_Score) %>% 
+  summarise(avg_hours = mean(Hours))
+p1 <- ggplot(data= gsd_hours_GAD, aes(x=avg_hours, y=Total_GAD_Score)) + geom_line() +
+  geom_smooth(span =1, method=lm) + ggtitle("Total GAD Scores vs Avg Hours Played")
+
+p1a <- ggplot(data= gsd, aes(x=Hours, y=Total_GAD_Score)) + geom_point() +
+  geom_smooth(span =1) + ggtitle("Total GAD Scores vs Hours Played")
+p1a
+p1
+```
+
+Here we have 2 graphs, one with the total hours and GAD scores and the other
+with averaged hours spent per week by GAD scores. Both show a positive trend,
+with the averaged being much more extreme. This tells us two things:
+1. There is a positive trend with time spent gaming and general anxiety
+2. When participants are grouped by their GAD scores with the average taken
+of their hours played, GAD shows a positive relationship.
+
+**SPIN and Hours**
+```{r}
+gsd_hours_SPIN <- gsd %>% group_by(Social_Phobia) %>% 
+  summarise(avg_hours = mean(Hours))
+p2 <- ggplot(gsd_hours_SPIN, aes(x=avg_hours, y=Social_Phobia)) + 
+  geom_smooth(method=lm) + ggtitle("Social Phobia Scores vs Avg Hours Played")
+p2a <- ggplot(gsd, aes(x=Hours, y=Social_Phobia)) + 
+  geom_smooth(method=lm) + ggtitle("Social Phobia Scores vs Hours Played")
+p2a
+p2
+```
+The social phobia scores show another positive trend with average hours played
+per week.
+
+```{r}
+gsd_hours_SWL <- gsd %>% group_by(Life_Satisfaction) %>% 
+  summarise(avg_hours = mean(Hours))
+p3 <- ggplot(gsd_hours_SWL, aes(x=avg_hours, y=Life_Satisfaction)) +
+  geom_smooth(method=lm) + ggtitle("Life Satisfaction Scores vs Avg Hours Played")
+p3a <- ggplot(gsd, aes(x=Hours, y=Life_Satisfaction)) + 
+  geom_smooth(method=lm) + ggtitle("Life Satisfaction Scores vs Hours Played")
+p3a
+p3
+```
+The life satisfaction plot shows a negative trend, meaning as the hours and 
+average hours per week increases, life satisfaction decreases. 
+
+```{r}
+grid.arrange(p1,p2,p3)
+```
+
+
+```{r}
+above_avg_hours <- gsd %>% filter(Hours < 22)
+below_avg_hours <- gsd %>% filter(Hours >=22)
+```
+
+## Modeling
+Since we noticed in our analysis so far, people who spend around
+the average amount of hours playing per week are generally not very anxious,
+social phobic, or have low life satisfaction. We can see changes above the mean
+for GAD, however. So in this section we will look at modeling to explore if GAD
+scores are significantly changed when looking above and below the mean. 
+Additionally, we check SPIN and sWL for anything interesting.
+
+**GAD** Score vs Hours Correlation
+```{r}
+cor_GAD<-cor.test(gsd$Hours, gsd$Total_GAD_Score, 
+                  method =c("pearson", "kendall","spearman"))
+cor_GADabove_avg_hours <- cor.test(above_avg_hours$Total_GAD_Score, 
+         above_avg_hours$Hours, method =c("pearson", "kendall","spearman"))
+cor_GADbelow_avg_hours <- cor.test(below_avg_hours$Total_GAD_Score, 
+         below_avg_hours$Hours, method =c("pearson", "kendall","spearman"))
+cor_GAD
+cor_GADabove_avg_hours
+cor_GADbelow_avg_hours
+```
+The highest coefficient here is for gamers with below average games per week. 
+This is interesting because it goes against our hypothesis that spending a lot
+of time gaming increases anxiety. Looking at the line graph 
+**Total GAD Scores vs AVG Hours Played**, there is a dip at around the average
+amount of time spent gaming which would theoretically show a negative
+correlation below the average. However, looking at the individual hours played
+per participant, there is still a positive relationship. 
+
+
+**SPIN** Score vs Hours Correlation
+```{r}
+cor_SPIN<-cor.test(gsd$Hours, gsd$Social_Phobia, 
+                  method =c("pearson", "kendall","spearman"))
+cor_SPINabove_avg_hours <- cor.test(above_avg_hours$Social_Phobia, 
+         above_avg_hours$Hours, method =c("pearson", "kendall","spearman"))
+cor_SPINbelow_avg_hours <- cor.test(below_avg_hours$Social_Phobia, 
+         below_avg_hours$Hours, method =c("pearson", "kendall","spearman"))
+cor_SPIN
+cor_SPINabove_avg_hours
+cor_SPINbelow_avg_hours
+
+```
+
+Looking at the correlations of the SPIN data, we see something interesting. For
+all gamers, the correlation is higher meaning there is a greater positive
+relationship with social phobia than participants who spend above average time 
+gaming per week. From this, we can gather that those who spend a lot of time
+gaming are less likely to experience social phobia. This could be explained by
+the fact that these games are online, allowing for socialization. 
+
+**SWL** Score vs Hours Correlation
+```{r}
+cor_SWL<-cor.test(gsd$Hours, gsd$Life_Satisfaction, 
+                  method =c("pearson", "kendall","spearman"))
+cor_SWLabove_avg_hours <- cor.test(above_avg_hours$Life_Satisfaction, 
+         above_avg_hours$Hours, method =c("pearson", "kendall","spearman"))
+cor_SWLbelow_avg_hours <- cor.test(below_avg_hours$Life_Satisfaction, 
+         below_avg_hours$Hours, method =c("pearson", "kendall","spearman"))
+cor_SWL
+cor_SWLabove_avg_hours
+cor_SWLbelow_avg_hours
+```
+Finally, we look at life satisfaction. We find a similar result to SPIN, except
+it is a negative relationship. This makes since because a high score is 
+associated with high satisfaction. The P-values for these correlations is very
+low, so the findings cannot be soundly explained. What we can gather, is that
+those who spend above average time gaming are less likely to be dissatisfied
+with life. The way we may be able to think about this that people who game
+often could get some satisfaction out of it.
+
+##Conclusion
+
+Overall, we can conclude that time spent gaming has an effect on a persons potential for General Anxiety, Social Phobia and Dissatisfaction in life. However, we can't say that gaming is the cause of these issues. A few predictions on why we can't confirm our hypothesis are:
+
+1. Not enough data
+
+Our data set is comprised with a vast majority of League of Legends players. There are over 100 million active LoL players, of which our data contains ~11,000 of, is barely scraping the surface. 
+
+2. General Population
+
+Since we don't have GAD, SPIN, and SWL data for the general population (i.e not all gamers), we don't have anything to compare the gamers' scores to. How do we know how anxious, social phobic, and dissatisfied with life people are in general? It's possible that our data could be a reflection of the general population.
